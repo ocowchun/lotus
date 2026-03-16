@@ -21,6 +21,13 @@
 - Quality analysis should be useful enough to guide attention, even if the scoring is imperfect in early versions.
 - UX matters because this product is fundamentally about reducing cognitive load during review.
 
+## Product Discovery Behavior
+- When product requirements are still unclear, ask questions one by one instead of sending a large batch.
+- Each question should include a suggested default, recommendation, or example answer so the user can react quickly.
+- Prefer questions that reduce the biggest product risk first, such as scoring trust, review workflow, and deletion safety.
+- After each answer, incorporate the new information before asking the next question.
+- If the user asks to be interviewed, keep the interview focused, sequential, and grounded in concrete product decisions.
+
 ## Day 1 Scope
 - Allow the user to select a single folder.
 - Scan only that folder. Do not recurse into subfolders unless the user explicitly asks for it later.
