@@ -446,20 +446,42 @@ private struct PhotoList: View {
     @ObservedObject var store: ReviewStore
 
     var body: some View {
-        List(selection: Binding(
-            get: { store.selectedPhotoID },
-            set: { newValue in
-                if let newValue {
-                    store.selectPhoto(id: newValue)
+        ScrollViewReader { proxy in
+            List(selection: Binding(
+                get: { store.selectedPhotoID },
+                set: { newValue in
+                    if let newValue {
+                        store.selectPhoto(id: newValue)
+                    }
+                }
+            )) {
+                ForEach(store.visiblePhotos) { photo in
+                    PhotoRow(photo: photo)
+                        .tag(photo.id)
+                        .id(photo.id)
                 }
             }
-        )) {
-            ForEach(store.visiblePhotos) { photo in
-                PhotoRow(photo: photo)
-                    .tag(photo.id)
+            .listStyle(.sidebar)
+            .onAppear {
+                scrollToSelectedPhoto(with: proxy)
+            }
+            .onChange(of: store.selectedPhotoID) { _, _ in
+                scrollToSelectedPhoto(with: proxy)
+            }
+            .onChange(of: store.visiblePhotos.map(\.id)) { _, _ in
+                scrollToSelectedPhoto(with: proxy)
             }
         }
-        .listStyle(.sidebar)
+    }
+
+    private func scrollToSelectedPhoto(with proxy: ScrollViewProxy) {
+        guard let selectedPhotoID = store.selectedPhotoID else { return }
+
+        DispatchQueue.main.async {
+            withAnimation(.easeInOut(duration: 0.16)) {
+                proxy.scrollTo(selectedPhotoID, anchor: .center)
+            }
+        }
     }
 }
 
