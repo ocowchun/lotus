@@ -1,0 +1,286 @@
+//
+//  ReviewStore.swift
+//  lotus
+//
+
+import AppKit
+import Combine
+import Foundation
+
+@MainActor
+final class ReviewStore: ObservableObject {
+    @Published private(set) var folderURL: URL?
+    @Published private(set) var photos: [PhotoRecord] = []
+    @Published var selectedPhotoID: PhotoRecord.ID?
+    @Published private(set) var previewImage: NSImage?
+    @Published private(set) var isPreviewLoading = false
+    @Published private(set) var isImporting = false
+    @Published private(set) var errorMessage: String?
+    @Published private(set) var filter: ReviewFilter = .all
+    @Published var isDetailsExpanded = false
+    @Published var isZoomed = false
+
+    private let pipeline = PhotoPipeline()
+    private let shortcutStore: ShortcutStore
+    private var importTask: Task<Void, Never>?
+    private var previewTask: Task<Void, Never>?
+
+    init(shortcutStore: ShortcutStore) {
+        self.shortcutStore = shortcutStore
+    }
+
+    var visiblePhotos: [PhotoRecord] {
+        photos.filter { filter.matches($0.decision) }
+    }
+
+    var currentPhoto: PhotoRecord? {
+        guard let selectedPhotoID else { return nil }
+        return photos.first(where: { $0.id == selectedPhotoID })
+    }
+
+    var currentDisplayImage: NSImage? {
+        previewImage ?? currentPhoto?.thumbnail
+    }
+
+    var summary: ReviewSummary {
+        ReviewSummary.make(from: photos)
+    }
+
+    var positionText: String {
+        guard
+            let selectedPhotoID,
+            let position = visiblePhotos.firstIndex(where: { $0.id == selectedPhotoID })
+        else {
+            return "0 / \(visiblePhotos.count)"
+        }
+
+        return "\(position + 1) / \(visiblePhotos.count)"
+    }
+
+    func selectFolder() {
+        guard confirmDiscardIfNeeded() else { return }
+
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Select Folder"
+
+        if panel.runModal() == .OK, let url = panel.url {
+            loadFolder(at: url)
+        }
+    }
+
+    func loadFolder(at url: URL) {
+        importTask?.cancel()
+        previewTask?.cancel()
+
+        folderURL = url
+        photos = []
+        selectedPhotoID = nil
+        previewImage = nil
+        isPreviewLoading = false
+        isImporting = true
+        errorMessage = nil
+        isDetailsExpanded = false
+        isZoomed = false
+
+        importTask = Task { [weak self] in
+            guard let self else { return }
+
+            do {
+                let urls = try pipeline.scanFolder(at: url)
+
+                if urls.isEmpty {
+                    self.errorMessage = "No supported images were found in that folder."
+                    self.isImporting = false
+                    return
+                }
+
+                for fileURL in urls {
+                    if Task.isCancelled { return }
+
+                    do {
+                        let record = try pipeline.makeRecord(for: fileURL)
+                        self.photos.append(record)
+
+                        if self.selectedPhotoID == nil {
+                            self.selectedPhotoID = record.id
+                            self.loadPreview(for: record.id)
+                        }
+
+                        Task.detached(priority: .utility) { [weak self] in
+                            guard let self else { return }
+                            let pipeline = PhotoPipeline()
+                            let analysis: AnalysisState
+                            do {
+                                let score = try pipeline.analyze(url: fileURL)
+                                analysis = .ready(score)
+                            } catch {
+                                analysis = .failed
+                            }
+
+                            await MainActor.run {
+                                self.updateAnalysis(for: record.id, analysis: analysis)
+                            }
+                        }
+                    } catch {
+                        self.errorMessage = "Some images could not be read."
+                    }
+                }
+
+                self.isImporting = false
+            } catch {
+                self.errorMessage = "Lotus could not scan the selected folder."
+                self.isImporting = false
+            }
+        }
+    }
+
+    func selectPhoto(id: UUID) {
+        guard selectedPhotoID != id else { return }
+        selectedPhotoID = id
+        isZoomed = false
+        loadPreview(for: id)
+    }
+
+    func moveSelection(forward: Bool) {
+        let pool = visiblePhotos
+        guard !pool.isEmpty else { return }
+
+        guard
+            let selectedPhotoID,
+            let currentIndex = pool.firstIndex(where: { $0.id == selectedPhotoID })
+        else {
+            selectPhoto(id: pool[0].id)
+            return
+        }
+
+        let delta = forward ? 1 : -1
+        let newIndex = min(max(0, currentIndex + delta), pool.count - 1)
+        selectPhoto(id: pool[newIndex].id)
+    }
+
+    func setDecision(_ decision: PhotoDecision) {
+        guard let selectedPhotoID, let index = photos.firstIndex(where: { $0.id == selectedPhotoID }) else { return }
+
+        photos[index].decision = decision
+        reconcileSelectionAfterMutation(referenceID: selectedPhotoID)
+
+        if decision != .undecided {
+            moveSelection(forward: true)
+        }
+    }
+
+    func setFilter(_ filter: ReviewFilter) {
+        self.filter = filter
+        reconcileSelectionAfterMutation(referenceID: selectedPhotoID)
+    }
+
+    func toggleDetails() {
+        isDetailsExpanded.toggle()
+    }
+
+    func toggleZoom() {
+        guard currentDisplayImage != nil else { return }
+        isZoomed.toggle()
+    }
+
+    func handleShortcut(_ key: ShortcutKey) {
+        let shortcuts = shortcutStore.shortcuts
+
+        switch key {
+        case shortcuts.previousPrimary, shortcuts.previousSecondary:
+            moveSelection(forward: false)
+        case shortcuts.nextPrimary, shortcuts.nextSecondary:
+            moveSelection(forward: true)
+        case shortcuts.keep:
+            setDecision(.keep)
+        case shortcuts.reject:
+            setDecision(.reject)
+        case shortcuts.undecided:
+            setDecision(.undecided)
+        case shortcuts.more:
+            toggleDetails()
+        case shortcuts.zoom:
+            toggleZoom()
+        default:
+            break
+        }
+    }
+
+    private func updateAnalysis(for id: UUID, analysis: AnalysisState) {
+        guard let index = photos.firstIndex(where: { $0.id == id }) else { return }
+        photos[index].analysis = analysis
+    }
+
+    private func loadPreview(for id: UUID) {
+        previewTask?.cancel()
+        previewImage = nil
+        isPreviewLoading = true
+
+        guard let record = photos.first(where: { $0.id == id }) else {
+            isPreviewLoading = false
+            return
+        }
+
+        previewTask = Task { [weak self] in
+            guard let self else { return }
+
+            let image = try? pipeline.makePreview(for: record.url)
+
+            guard !Task.isCancelled else { return }
+            self.previewImage = image
+            self.isPreviewLoading = false
+        }
+    }
+
+    private func reconcileSelectionAfterMutation(referenceID: UUID?) {
+        let pool = visiblePhotos
+
+        guard !pool.isEmpty else {
+            selectedPhotoID = nil
+            previewImage = nil
+            return
+        }
+
+        if let selectedPhotoID, pool.contains(where: { $0.id == selectedPhotoID }) {
+            return
+        }
+
+        if let referenceID, let referenceIndex = photos.firstIndex(where: { $0.id == referenceID }) {
+            let nearest = pool.min(by: { lhs, rhs in
+                guard
+                    let lhsIndex = photos.firstIndex(where: { $0.id == lhs.id }),
+                    let rhsIndex = photos.firstIndex(where: { $0.id == rhs.id })
+                else {
+                    return false
+                }
+
+                return abs(lhsIndex - referenceIndex) < abs(rhsIndex - referenceIndex)
+            })
+
+            if let nearest {
+                selectPhoto(id: nearest.id)
+                return
+            }
+        }
+
+        if let first = pool.first {
+            selectPhoto(id: first.id)
+        }
+    }
+
+    private func confirmDiscardIfNeeded() -> Bool {
+        guard !photos.isEmpty else { return true }
+
+        let alert = NSAlert()
+        alert.messageText = "Replace current review?"
+        alert.informativeText = "Your in-memory review decisions will be lost."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Replace")
+        alert.addButton(withTitle: "Cancel")
+
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+}

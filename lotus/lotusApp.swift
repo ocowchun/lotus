@@ -9,9 +9,24 @@ import SwiftUI
 
 @main
 struct lotusApp: App {
+    @StateObject private var shortcutStore: ShortcutStore
+    @StateObject private var reviewStore: ReviewStore
+
+    init() {
+        let shortcutStore = ShortcutStore()
+        _shortcutStore = StateObject(wrappedValue: shortcutStore)
+        _reviewStore = StateObject(wrappedValue: ReviewStore(shortcutStore: shortcutStore))
+    }
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(store: reviewStore)
+                .environmentObject(shortcutStore)
+        }
+
+        Settings {
+            SettingsView()
+                .environmentObject(shortcutStore)
         }
     }
 }
