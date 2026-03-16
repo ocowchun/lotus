@@ -99,35 +99,11 @@ private struct ReviewHeaderView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            HStack(spacing: 10) {
-                Text(store.folderURL?.lastPathComponent ?? "Review")
-                    .font(.headline)
-
-                Text(store.positionText)
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(.secondary)
-
-                if store.isImporting {
-                    Text("Scanning \(store.photos.count)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                if let errorMessage = store.errorMessage {
-                    Text(errorMessage)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .lineLimit(1)
-                }
-            }
+            ReviewHeaderStatusView(store: store)
 
             Spacer(minLength: 12)
 
-            HStack(spacing: 8) {
-                CountBadge(title: "Keep", count: store.summary.keepCount, tint: PhotoDecision.keep.tint)
-                CountBadge(title: "Reject", count: store.summary.rejectCount, tint: PhotoDecision.reject.tint)
-                CountBadge(title: "Undecided", count: store.summary.undecidedCount, tint: PhotoDecision.undecided.tint)
-            }
+            ReviewHeaderCountsView(summary: store.summary)
 
             Button(action: store.selectFolder) {
                 Label("Change Folder", systemImage: "folder")
@@ -138,6 +114,46 @@ private struct ReviewHeaderView: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 10)
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+}
+
+private struct ReviewHeaderStatusView: View {
+    @ObservedObject var store: ReviewStore
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(store.folderURL?.lastPathComponent ?? "Review")
+                .font(.headline)
+
+            Text(store.positionText)
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(.secondary)
+
+            if store.isImporting {
+                Text("Scanning \(store.photos.count)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let errorMessage = store.errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .lineLimit(1)
+            }
+        }
+    }
+}
+
+private struct ReviewHeaderCountsView: View {
+    let summary: ReviewSummary
+
+    var body: some View {
+        HStack(spacing: 8) {
+            CountBadge(title: "Keep", count: summary.keepCount, tint: PhotoDecision.keep.tint)
+            CountBadge(title: "Reject", count: summary.rejectCount, tint: PhotoDecision.reject.tint)
+            CountBadge(title: "Undecided", count: summary.undecidedCount, tint: PhotoDecision.undecided.tint)
+        }
     }
 }
 
@@ -256,22 +272,7 @@ private struct MetadataPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(photo.filename)
-                        .font(.title3.weight(.semibold))
-                        .lineLimit(1)
-
-                    Text(photo.url.path)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                Spacer()
-
-                DecisionChip(decision: photo.decision)
-            }
+            MetadataHeader(photo: photo)
 
             HStack(alignment: .top, spacing: 28) {
                 MetadataColumn(title: "Capture", values: photo.metadata.captureEntries)
@@ -285,6 +286,29 @@ private struct MetadataPanel: View {
         .background {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color(nsColor: .controlBackgroundColor))
+        }
+    }
+}
+
+private struct MetadataHeader: View {
+    let photo: PhotoRecord
+
+    var body: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(photo.filename)
+                    .font(.title3.weight(.semibold))
+                    .lineLimit(1)
+
+                Text(photo.url.path)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            DecisionChip(decision: photo.decision)
         }
     }
 }
@@ -320,79 +344,129 @@ private struct ScoreSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center) {
-                Text("Evaluation")
-                    .font(.headline)
+            ScoreSectionHeader(analysis: photo.analysis)
+            ScoreSectionBody(analysis: photo.analysis, detailsExpanded: detailsExpanded)
+        }
+    }
+}
 
+private struct ScoreSectionHeader: View {
+    let analysis: AnalysisState
+
+    var body: some View {
+        HStack(alignment: .center) {
+            Text("Evaluation")
+                .font(.headline)
+
+            Spacer()
+
+            AnalysisSummaryView(analysis: analysis)
+        }
+    }
+}
+
+private struct AnalysisSummaryView: View {
+    let analysis: AnalysisState
+
+    var body: some View {
+        switch analysis {
+        case .pending:
+            Label("Analyzing...", systemImage: "sparkles")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .failed:
+            Label("Unavailable", systemImage: "exclamationmark.triangle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .ready(let score):
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("\(score.value) / 100")
+                    .font(.title3.weight(.semibold))
+                Text(score.label.title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(score.label.tint)
+            }
+        }
+    }
+}
+
+private struct ScoreSectionBody: View {
+    let analysis: AnalysisState
+    let detailsExpanded: Bool
+
+    var body: some View {
+        switch analysis {
+        case .pending:
+            Text("Lotus is computing an initial technical evaluation for this photo.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        case .failed:
+            Text("Lotus could not evaluate this photo yet.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        case .ready(let score):
+            ReadyScoreSection(score: score, detailsExpanded: detailsExpanded)
+        }
+    }
+}
+
+private struct ReadyScoreSection: View {
+    let score: PhotoScore
+    let detailsExpanded: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ScoreReasonsView(reasons: score.reasons)
+
+            if detailsExpanded {
+                Divider()
+                ScoreBreakdownView(breakdown: score.breakdown)
+            }
+        }
+    }
+}
+
+private struct ScoreReasonsView: View {
+    let reasons: [String]
+
+    var body: some View {
+        FlowLayout(spacing: 8) {
+            ForEach(reasons, id: \.self) { reason in
+                Text(reason)
+                    .font(.caption.weight(.medium))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background {
+                        Capsule()
+                            .fill(Color(nsColor: .tertiarySystemFill))
+                    }
+            }
+        }
+    }
+}
+
+private struct ScoreBreakdownView: View {
+    let breakdown: [ScoreBreakdown]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(breakdown) { item in
+                HStack {
+                    Text(item.title)
+                    Spacer()
+                    Text(item.value)
+                        .foregroundStyle(.secondary)
+                }
+                .font(.subheadline)
+            }
+
+            HStack {
+                Text("Similar Set")
                 Spacer()
-
-                switch photo.analysis {
-                case .pending:
-                    Label("Analyzing...", systemImage: "sparkles")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                case .failed:
-                    Label("Unavailable", systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                case .ready(let score):
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text("\(score.value) / 100")
-                            .font(.title3.weight(.semibold))
-                        Text(score.label.title)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(score.label.tint)
-                    }
-                }
-            }
-
-            switch photo.analysis {
-            case .pending:
-                Text("Lotus is computing an initial technical evaluation for this photo.")
-                    .font(.callout)
+                Text("Not analyzed in this workflow-first build")
                     .foregroundStyle(.secondary)
-            case .failed:
-                Text("Lotus could not evaluate this photo yet.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            case .ready(let score):
-                FlowLayout(spacing: 8) {
-                    ForEach(score.reasons, id: \.self) { reason in
-                        Text(reason)
-                            .font(.caption.weight(.medium))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background {
-                                Capsule()
-                                    .fill(Color(nsColor: .tertiarySystemFill))
-                            }
-                    }
-                }
-
-                if detailsExpanded {
-                    Divider()
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(score.breakdown) { item in
-                            HStack {
-                                Text(item.title)
-                                Spacer()
-                                Text(item.value)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .font(.subheadline)
-                        }
-
-                        HStack {
-                            Text("Similar Set")
-                            Spacer()
-                            Text("Not analyzed in this workflow-first build")
-                                .foregroundStyle(.secondary)
-                        }
-                        .font(.subheadline)
-                    }
-                }
             }
+            .font(.subheadline)
         }
     }
 }
