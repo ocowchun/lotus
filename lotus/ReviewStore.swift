@@ -9,6 +9,11 @@ import Foundation
 
 @MainActor
 final class ReviewStore: ObservableObject {
+    private enum ImportBatching {
+        static let recordBatchSize = 24
+        static let enrichmentConcurrency = 4
+    }
+
     @Published private(set) var folderURL: URL?
     @Published private(set) var photos: [PhotoRecord] = []
     @Published var selectedPhotoID: PhotoRecord.ID?
@@ -89,7 +94,9 @@ final class ReviewStore: ObservableObject {
             guard let self else { return }
 
             do {
-                let urls = try pipeline.scanFolder(at: url)
+                let urls = try await Task.detached(priority: .userInitiated) {
+                    try PhotoPipeline().scanFolder(at: url)
+                }.value
 
                 if urls.isEmpty {
                     self.errorMessage = "No supported images were found in that folder."
@@ -97,38 +104,29 @@ final class ReviewStore: ObservableObject {
                     return
                 }
 
-                for fileURL in urls {
-                    if Task.isCancelled { return }
-
-                    do {
-                        let record = try pipeline.makeRecord(for: fileURL)
-                        self.photos.append(record)
-
-                        if self.selectedPhotoID == nil {
-                            self.selectedPhotoID = record.id
-                            self.loadPreview(for: record.id)
+                let indexedURLs = Array(urls.enumerated())
+                for batchStart in stride(from: 0, to: indexedURLs.count, by: ImportBatching.recordBatchSize) {
+                    try Task.checkCancellation()
+                    let batch = Array(indexedURLs[batchStart..<min(batchStart + ImportBatching.recordBatchSize, indexedURLs.count)])
+                    let records = await Task.detached(priority: .userInitiated) {
+                        let pipeline = PhotoPipeline()
+                        return batch.compactMap { index, fileURL -> IndexedPhotoRecord? in
+                            guard let record = try? pipeline.makeRecord(for: fileURL) else { return nil }
+                            return IndexedPhotoRecord(index: index, record: record)
                         }
+                    }.value
 
-                        Task.detached(priority: .utility) { [weak self] in
-                            guard let self else { return }
-                            let pipeline = PhotoPipeline()
-                            let analysis: AnalysisState
-                            do {
-                                let score = try pipeline.analyze(url: fileURL)
-                                analysis = .ready(score)
-                            } catch {
-                                analysis = .failed
-                            }
+                    self.appendImportedRecords(records)
 
-                            await MainActor.run {
-                                self.updateAnalysis(for: record.id, analysis: analysis)
-                            }
-                        }
-                    } catch {
+                    if self.errorMessage == nil, records.count != batch.count {
                         self.errorMessage = "Some images could not be read."
                     }
                 }
 
+                try await self.enrichPhotos(urls)
+
+                self.isImporting = false
+            } catch is CancellationError {
                 self.isImporting = false
             } catch {
                 self.errorMessage = "Lotus could not scan the selected folder."
@@ -214,6 +212,11 @@ final class ReviewStore: ObservableObject {
         photos[index].analysis = analysis
     }
 
+    private func updateThumbnail(for id: UUID, thumbnail: NSImage?) {
+        guard let index = photos.firstIndex(where: { $0.id == id }) else { return }
+        photos[index].thumbnail = thumbnail
+    }
+
     private func loadPreview(for id: UUID) {
         previewTask?.cancel()
         previewImage = nil
@@ -227,7 +230,9 @@ final class ReviewStore: ObservableObject {
         previewTask = Task { [weak self] in
             guard let self else { return }
 
-            let image = try? pipeline.makePreview(for: record.url)
+            let image = try? await Task.detached(priority: .userInitiated) {
+                try PhotoPipeline().makePreview(for: record.url)
+            }.value
 
             guard !Task.isCancelled else { return }
             self.previewImage = image
@@ -283,4 +288,82 @@ final class ReviewStore: ObservableObject {
 
         return alert.runModal() == .alertFirstButtonReturn
     }
+
+    private func appendImportedRecords(_ imported: [IndexedPhotoRecord]) {
+        let sortedRecords = imported.sorted { $0.index < $1.index }.map(\.record)
+        guard !sortedRecords.isEmpty else { return }
+
+        photos.append(contentsOf: sortedRecords)
+
+        if selectedPhotoID == nil, let first = sortedRecords.first {
+            selectedPhotoID = first.id
+            loadPreview(for: first.id)
+        }
+    }
+
+    private func enrichPhotos(_ urls: [URL]) async throws {
+        let indexedURLs = Array(urls.enumerated())
+
+        try await withThrowingTaskGroup(of: EnrichedPhoto.self) { group in
+            var nextIndex = 0
+            let initialCount = min(ImportBatching.enrichmentConcurrency, indexedURLs.count)
+
+            for _ in 0..<initialCount {
+                let pair = indexedURLs[nextIndex]
+                nextIndex += 1
+                group.addTask {
+                    try await Self.processEnrichment(for: pair.offset, fileURL: pair.element)
+                }
+            }
+
+            while let result = try await group.next() {
+                self.applyEnrichment(result)
+
+                if nextIndex < indexedURLs.count {
+                    let pair = indexedURLs[nextIndex]
+                    nextIndex += 1
+                    group.addTask {
+                        try await Self.processEnrichment(for: pair.offset, fileURL: pair.element)
+                    }
+                }
+            }
+        }
+    }
+
+    private func applyEnrichment(_ result: EnrichedPhoto) {
+        guard result.index < photos.count else { return }
+
+        let id = photos[result.index].id
+        updateThumbnail(for: id, thumbnail: result.thumbnail)
+        updateAnalysis(for: id, analysis: result.analysis)
+    }
+
+    private static func processEnrichment(for index: Int, fileURL: URL) async throws -> EnrichedPhoto {
+        try Task.checkCancellation()
+
+        return await Task.detached(priority: .utility) {
+            let pipeline = PhotoPipeline()
+            let thumbnail = try? pipeline.makeThumbnail(for: fileURL)
+            let analysis: AnalysisState
+            do {
+                let score = try pipeline.analyze(url: fileURL)
+                analysis = .ready(score)
+            } catch {
+                analysis = .failed
+            }
+
+            return EnrichedPhoto(index: index, thumbnail: thumbnail, analysis: analysis)
+        }.value
+    }
+}
+
+private struct IndexedPhotoRecord {
+    let index: Int
+    let record: PhotoRecord
+}
+
+private struct EnrichedPhoto {
+    let index: Int
+    let thumbnail: NSImage?
+    let analysis: AnalysisState
 }

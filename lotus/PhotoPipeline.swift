@@ -12,12 +12,14 @@ enum PhotoPipelineError: Error {
     case unreadableImage
 }
 
-struct PhotoPipeline {
-    static let supportedExtensions: Set<String> = [
+struct PhotoPipeline: Sendable {
+    nonisolated static let supportedExtensions: Set<String> = [
         "jpg", "jpeg", "png", "heic", "heif", "tif", "tiff"
     ]
 
-    func scanFolder(at folderURL: URL) throws -> [URL] {
+    nonisolated init() {}
+
+    nonisolated func scanFolder(at folderURL: URL) throws -> [URL] {
         let keys: [URLResourceKey] = [.isRegularFileKey]
         let urls = try FileManager.default.contentsOfDirectory(
             at: folderURL,
@@ -36,13 +38,12 @@ struct PhotoPipeline {
             }
     }
 
-    func makeRecord(for url: URL) throws -> PhotoRecord {
+    nonisolated func makeRecord(for url: URL) throws -> PhotoRecord {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
             throw PhotoPipelineError.unreadableImage
         }
 
         let metadata = makeMetadata(from: source, url: url)
-        let thumbnail = makeImage(from: source, maxPixelSize: 240)
 
         return PhotoRecord(
             id: UUID(),
@@ -51,11 +52,20 @@ struct PhotoPipeline {
             metadata: metadata,
             decision: .undecided,
             analysis: .pending,
-            thumbnail: thumbnail
+            thumbnail: nil
         )
     }
 
-    func makePreview(for url: URL) throws -> NSImage {
+    nonisolated func makeThumbnail(for url: URL) throws -> NSImage {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let image = makeImage(from: source, maxPixelSize: 240) else {
+            throw PhotoPipelineError.unreadableImage
+        }
+
+        return image
+    }
+
+    nonisolated func makePreview(for url: URL) throws -> NSImage {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let image = makeImage(from: source, maxPixelSize: 1800) else {
             throw PhotoPipelineError.unreadableImage
@@ -64,7 +74,7 @@ struct PhotoPipeline {
         return image
     }
 
-    func analyze(url: URL) throws -> PhotoScore {
+    nonisolated func analyze(url: URL) throws -> PhotoScore {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let image = makeCGImage(from: source, maxPixelSize: 320) else {
             throw PhotoPipelineError.unreadableImage
@@ -96,7 +106,7 @@ struct PhotoPipeline {
         )
     }
 
-    private func makeMetadata(from source: CGImageSource, url: URL) -> PhotoMetadata {
+    nonisolated private func makeMetadata(from source: CGImageSource, url: URL) -> PhotoMetadata {
         let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
         let pixelWidth = properties?[kCGImagePropertyPixelWidth] as? Int ?? 0
         let pixelHeight = properties?[kCGImagePropertyPixelHeight] as? Int ?? 0
@@ -136,7 +146,7 @@ struct PhotoPipeline {
         )
     }
 
-    private func makeImage(from source: CGImageSource, maxPixelSize: Int) -> NSImage? {
+    nonisolated private func makeImage(from source: CGImageSource, maxPixelSize: Int) -> NSImage? {
         guard let cgImage = makeCGImage(from: source, maxPixelSize: maxPixelSize) else {
             return nil
         }
@@ -144,7 +154,7 @@ struct PhotoPipeline {
         return NSImage(cgImage: cgImage, size: .zero)
     }
 
-    private func makeCGImage(from source: CGImageSource, maxPixelSize: Int) -> CGImage? {
+    nonisolated private func makeCGImage(from source: CGImageSource, maxPixelSize: Int) -> CGImage? {
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
@@ -155,18 +165,18 @@ struct PhotoPipeline {
         return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 
-    private static func parseExifDate(_ value: String) -> Date? {
+    nonisolated private static func parseExifDate(_ value: String) -> Date? {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
         return formatter.date(from: value)
     }
 
-    private static func formattedExifNumber(_ value: Any?, prefix: String = "", suffix: String = "") -> String {
+    nonisolated private static func formattedExifNumber(_ value: Any?, prefix: String = "", suffix: String = "") -> String {
         guard let number = makeDouble(value) else { return "Unknown" }
         return "\(prefix)\(number.formatted(.number.precision(.fractionLength(0...1))))\(suffix)"
     }
 
-    private static func formattedISO(_ value: Any?) -> String {
+    nonisolated private static func formattedISO(_ value: Any?) -> String {
         if let values = value as? [Int], let first = values.first {
             return "ISO \(first)"
         }
@@ -178,7 +188,7 @@ struct PhotoPipeline {
         return "Unknown"
     }
 
-    private static func formattedShutter(_ value: Any?) -> String {
+    nonisolated private static func formattedShutter(_ value: Any?) -> String {
         guard let exposure = makeDouble(value), exposure > 0 else { return "Unknown" }
         if exposure >= 1 {
             return "\(exposure.formatted(.number.precision(.fractionLength(1)))) s"
@@ -187,7 +197,7 @@ struct PhotoPipeline {
         return "1/\(max(1, denominator)) s"
     }
 
-    private static func makeDouble(_ value: Any?) -> Double? {
+    nonisolated private static func makeDouble(_ value: Any?) -> Double? {
         switch value {
         case let number as Double: number
         case let number as NSNumber: number.doubleValue
@@ -205,7 +215,9 @@ private struct PixelAnalysis {
 }
 
 private struct PixelAnalyzer {
-    func analyze(_ image: CGImage) -> PixelAnalysis {
+    nonisolated init() {}
+
+    nonisolated func analyze(_ image: CGImage) -> PixelAnalysis {
         let width = image.width
         let height = image.height
         let bytesPerPixel = 4
@@ -309,7 +321,7 @@ private struct PixelAnalyzer {
 }
 
 private extension Double {
-    var formattedPercent: String {
+    nonisolated var formattedPercent: String {
         self.formatted(.percent.precision(.fractionLength(0)))
     }
 }
