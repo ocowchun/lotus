@@ -89,4 +89,5 @@
 ## Change Guidance
 - Keep changes focused and reversible.
 - Add or update tests when touching logic with deterministic behavior.
+- When a task is completed, update `docs/PROGRESS.md` to reflect what moved between TODO, WIP, and Done.
 - If a proposed solution conflicts with the local-first, minimal-dependency direction, call it out explicitly before implementing it.
