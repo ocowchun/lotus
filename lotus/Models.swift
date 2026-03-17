@@ -117,6 +117,10 @@ struct PhotoMetadata {
     var allEntries: [MetadataValue] {
         captureEntries + exposureEntries + fileEntries
     }
+
+    var secondaryEntries: [MetadataValue] {
+        captureEntries + fileEntries
+    }
 }
 
 struct ScoreBreakdown: Identifiable {

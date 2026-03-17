@@ -277,12 +277,13 @@ private struct MetadataPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            MetadataHeader(photo: photo, mode: mode)
-
             if mode == .concise {
                 ConciseMetadataContent(photo: photo)
             } else {
-                FullMetadataContent(photo: photo)
+                VStack(alignment: .leading, spacing: 16) {
+                    MetadataHeader(photo: photo, mode: mode)
+                    FullMetadataContent(photo: photo)
+                }
             }
         }
         .padding(18)
@@ -340,11 +341,16 @@ private struct ConciseMetadataContent: View {
     let photo: PhotoRecord
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            ConciseScoreCard(analysis: photo.analysis)
-                .frame(width: 180, alignment: .leading)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 16) {
+                ConciseScoreCard(analysis: photo.analysis)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                DecisionChip(decision: photo.decision)
+            }
 
             MetadataMetricGrid(values: photo.metadata.conciseEntries, columns: 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
@@ -418,7 +424,10 @@ private struct FullMetadataContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            MetadataMetricGrid(values: photo.metadata.allEntries, columns: 4)
+            VStack(alignment: .leading, spacing: 12) {
+                MetadataMetricGrid(values: photo.metadata.conciseEntries, columns: 4)
+                MetadataMetricGrid(values: photo.metadata.secondaryEntries, columns: 3)
+            }
 
             HStack(alignment: .top, spacing: 16) {
                 FullModeEvaluationPanel(photo: photo)
