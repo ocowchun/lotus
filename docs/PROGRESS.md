@@ -33,3 +33,4 @@
 - Read-write access for user-selected folders so the trash flow can modify files after confirmation.
 - Completion summary screen after the trash action finishes.
 - Outcome-based encouraging completion messages with warm tone variants.
+- Top-level README with a simple product introduction and current scope.
