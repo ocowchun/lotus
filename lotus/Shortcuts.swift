@@ -58,7 +58,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .keep: "Keep"
         case .reject: "Reject"
         case .undecided: "Undecided"
-        case .more: "More Details"
+        case .more: "Toggle Metadata Mode"
         case .zoom: "Zoom"
         }
     }

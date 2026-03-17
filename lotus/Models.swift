@@ -63,6 +63,18 @@ struct MetadataValue: Identifiable {
     var id: String { "\(label)-\(value)" }
 }
 
+enum MetadataPanelMode: String, CaseIterable {
+    case concise
+    case full
+
+    var title: String {
+        switch self {
+        case .concise: "Concise"
+        case .full: "Full"
+        }
+    }
+}
+
 struct PhotoMetadata {
     let captureTime: String
     let captureTimeShort: String
@@ -91,6 +103,19 @@ struct PhotoMetadata {
 
     var fileEntries: [MetadataValue] {
         [MetadataValue(label: "File Size", value: fileSize)]
+    }
+
+    var conciseEntries: [MetadataValue] {
+        [
+            MetadataValue(label: "Focal Length", value: focalLength),
+            MetadataValue(label: "Shutter", value: shutterSpeed),
+            MetadataValue(label: "Aperture", value: aperture),
+            MetadataValue(label: "ISO", value: iso)
+        ]
+    }
+
+    var allEntries: [MetadataValue] {
+        captureEntries + exposureEntries + fileEntries
     }
 }
 

@@ -74,4 +74,34 @@ struct lotusTests {
         #expect(summary.undecidedCount == 1)
     }
 
+    @Test func conciseMetadataEntriesShowOnlyPrimaryExposureFields() {
+        let metadata = PhotoMetadata(
+            captureTime: "Now",
+            captureTimeShort: "Now",
+            dimensions: "100 × 100",
+            fileSize: "1 MB",
+            focalLength: "35 mm",
+            shutterSpeed: "1/125 s",
+            aperture: "f/2.8",
+            iso: "ISO 100"
+        )
+
+        #expect(metadata.conciseEntries.map(\.label) == ["Focal Length", "Shutter", "Aperture", "ISO"])
+        #expect(metadata.allEntries.count == 7)
+    }
+
+    @MainActor
+    @Test func metadataModeToggleSwitchesBetweenConciseAndFull() {
+        let shortcutStore = ShortcutStore()
+        let store = ReviewStore(shortcutStore: shortcutStore)
+
+        #expect(store.metadataMode == .concise)
+
+        store.toggleMetadataMode()
+        #expect(store.metadataMode == .full)
+
+        store.toggleMetadataMode()
+        #expect(store.metadataMode == .concise)
+    }
+
 }

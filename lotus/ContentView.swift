@@ -190,10 +190,10 @@ private struct CurrentPhotoPane: View {
                 VStack(alignment: .leading, spacing: 14) {
                     PreviewStage(store: store)
                         .frame(maxWidth: .infinity)
-                        .frame(height: max(proxy.size.height * 0.8, 360))
+                        .frame(height: previewHeight(in: proxy.size.height))
 
                     if let photo = store.currentPhoto {
-                        MetadataPanel(photo: photo, detailsExpanded: store.isDetailsExpanded)
+                        MetadataPanel(photo: photo, mode: store.metadataMode)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     }
                 }
@@ -205,6 +205,11 @@ private struct CurrentPhotoPane: View {
                 }
             }
         }
+    }
+
+    private func previewHeight(in availableHeight: CGFloat) -> CGFloat {
+        let ratio: CGFloat = store.metadataMode == .concise ? 0.68 : 0.50
+        return max(availableHeight * ratio, 300)
     }
 }
 
@@ -268,19 +273,17 @@ private struct ZoomOverlay: View {
 
 private struct MetadataPanel: View {
     let photo: PhotoRecord
-    let detailsExpanded: Bool
+    let mode: MetadataPanelMode
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            MetadataHeader(photo: photo)
+            MetadataHeader(photo: photo, mode: mode)
 
-            HStack(alignment: .top, spacing: 28) {
-                MetadataColumn(title: "Capture", values: photo.metadata.captureEntries)
-                MetadataColumn(title: "Exposure", values: photo.metadata.exposureEntries)
-                MetadataColumn(title: "File", values: photo.metadata.fileEntries)
+            if mode == .concise {
+                ConciseMetadataContent(photo: photo)
+            } else {
+                FullMetadataContent(photo: photo)
             }
-
-            ScoreSection(photo: photo, detailsExpanded: detailsExpanded)
         }
         .padding(18)
         .background {
@@ -292,6 +295,7 @@ private struct MetadataPanel: View {
 
 private struct MetadataHeader: View {
     let photo: PhotoRecord
+    let mode: MetadataPanelMode
 
     var body: some View {
         HStack(alignment: .top) {
@@ -308,23 +312,89 @@ private struct MetadataHeader: View {
 
             Spacer()
 
-            DecisionChip(decision: photo.decision)
+            VStack(alignment: .trailing, spacing: 8) {
+                ModeChip(mode: mode)
+                DecisionChip(decision: photo.decision)
+            }
         }
     }
 }
 
-private struct MetadataColumn: View {
-    let title: String
-    let values: [MetadataValue]
+private struct ModeChip: View {
+    let mode: MetadataPanelMode
+
+    var body: some View {
+        Text(mode.title)
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background {
+                Capsule()
+                    .fill(Color(nsColor: .tertiarySystemFill))
+            }
+            .foregroundStyle(.secondary)
+    }
+}
+
+private struct ConciseMetadataContent: View {
+    let photo: PhotoRecord
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            ConciseScoreCard(analysis: photo.analysis)
+                .frame(width: 180, alignment: .leading)
+
+            MetadataMetricGrid(values: photo.metadata.conciseEntries, columns: 4)
+        }
+    }
+}
+
+private struct ConciseScoreCard: View {
+    let analysis: AnalysisState
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title)
+            Text("Score")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
+            AnalysisSummaryView(analysis: analysis)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if case .pending = analysis {
+                Text("Evaluating technical quality.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if case .failed = analysis {
+                Text("Evaluation unavailable.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(nsColor: .underPageBackgroundColor))
+        }
+    }
+}
+
+private struct MetadataMetricGrid: View {
+    let values: [MetadataValue]
+    let columns: Int
+
+    var body: some View {
+        LazyVGrid(
+            columns: Array(
+                repeating: GridItem(.flexible(minimum: 110), spacing: 12, alignment: .top),
+                count: columns
+            ),
+            alignment: .leading,
+            spacing: 12
+        ) {
             ForEach(values) { value in
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(value.label)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -332,20 +402,108 @@ private struct MetadataColumn: View {
                     Text(value.value)
                         .font(.subheadline.weight(.medium))
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(nsColor: .underPageBackgroundColor))
+                }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct FullMetadataContent: View {
+    let photo: PhotoRecord
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            MetadataMetricGrid(values: photo.metadata.allEntries, columns: 4)
+
+            HStack(alignment: .top, spacing: 16) {
+                FullModeEvaluationPanel(photo: photo)
+
+                if case .ready(let score) = photo.analysis {
+                    ScoreBreakdownPanel(breakdown: score.breakdown)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                } else {
+                    ScoreStatusPanel(analysis: photo.analysis)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+            }
+        }
     }
 }
 
 private struct ScoreSection: View {
     let photo: PhotoRecord
-    let detailsExpanded: Bool
+    let showExpandedEvaluation: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ScoreSectionHeader(analysis: photo.analysis)
-            ScoreSectionBody(analysis: photo.analysis, detailsExpanded: detailsExpanded)
+            ScoreSectionBody(analysis: photo.analysis, showExpandedEvaluation: showExpandedEvaluation)
+        }
+    }
+}
+
+private struct FullModeEvaluationPanel: View {
+    let photo: PhotoRecord
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Evaluation")
+                    .font(.headline)
+
+                Spacer()
+
+                AnalysisSummaryView(analysis: photo.analysis)
+            }
+
+            ScoreSectionBody(analysis: photo.analysis, showExpandedEvaluation: false)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(nsColor: .underPageBackgroundColor))
+        }
+    }
+}
+
+private struct ScoreStatusPanel: View {
+    let analysis: AnalysisState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Status")
+                .font(.headline)
+
+            ScoreSectionBody(analysis: analysis, showExpandedEvaluation: false)
+        }
+        .padding(14)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(nsColor: .underPageBackgroundColor))
+        }
+    }
+}
+
+private struct ScoreBreakdownPanel: View {
+    let breakdown: [ScoreBreakdown]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Technical Breakdown")
+                .font(.headline)
+
+            ScoreBreakdownView(breakdown: breakdown)
+        }
+        .padding(14)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(nsColor: .underPageBackgroundColor))
         }
     }
 }
@@ -392,7 +550,7 @@ private struct AnalysisSummaryView: View {
 
 private struct ScoreSectionBody: View {
     let analysis: AnalysisState
-    let detailsExpanded: Bool
+    let showExpandedEvaluation: Bool
 
     var body: some View {
         switch analysis {
@@ -405,20 +563,20 @@ private struct ScoreSectionBody: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
         case .ready(let score):
-            ReadyScoreSection(score: score, detailsExpanded: detailsExpanded)
+            ReadyScoreSection(score: score, showExpandedEvaluation: showExpandedEvaluation)
         }
     }
 }
 
 private struct ReadyScoreSection: View {
     let score: PhotoScore
-    let detailsExpanded: Bool
+    let showExpandedEvaluation: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ScoreReasonsView(reasons: score.reasons)
 
-            if detailsExpanded {
+            if showExpandedEvaluation {
                 Divider()
                 ScoreBreakdownView(breakdown: score.breakdown)
             }

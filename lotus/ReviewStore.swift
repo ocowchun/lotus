@@ -22,7 +22,7 @@ final class ReviewStore: ObservableObject {
     @Published private(set) var isImporting = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var filter: ReviewFilter = .all
-    @Published var isDetailsExpanded = false
+    @Published var metadataMode: MetadataPanelMode = .concise
     @Published var isZoomed = false
 
     private let pipeline = PhotoPipeline()
@@ -87,7 +87,7 @@ final class ReviewStore: ObservableObject {
         isPreviewLoading = false
         isImporting = true
         errorMessage = nil
-        isDetailsExpanded = false
+        metadataMode = .concise
         isZoomed = false
 
         importTask = Task { [weak self] in
@@ -175,8 +175,8 @@ final class ReviewStore: ObservableObject {
         reconcileSelectionAfterMutation(referenceID: selectedPhotoID)
     }
 
-    func toggleDetails() {
-        isDetailsExpanded.toggle()
+    func toggleMetadataMode() {
+        metadataMode = metadataMode == .concise ? .full : .concise
     }
 
     func toggleZoom() {
@@ -199,7 +199,7 @@ final class ReviewStore: ObservableObject {
         case shortcuts.undecided:
             setDecision(.undecided)
         case shortcuts.more:
-            toggleDetails()
+            toggleMetadataMode()
         case shortcuts.zoom:
             toggleZoom()
         default:
