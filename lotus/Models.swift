@@ -204,9 +204,10 @@ struct ReviewCompletion {
     let folderName: String
     let keepCount: Int
     let trashedCount: Int
+    let encouragementHeadline: String
 
     var title: String {
-        trashedCount > 0 ? "Rejected Photos Moved To Trash" : "Review Complete"
+        encouragementHeadline
     }
 
     var message: String {
@@ -215,5 +216,41 @@ struct ReviewCompletion {
         } else {
             "No rejected photos needed to be moved. \(keepCount) photo(s) were marked keep."
         }
+    }
+
+    static func make(folderName: String, keepCount: Int, trashedCount: Int) -> ReviewCompletion {
+        ReviewCompletion(
+            folderName: folderName,
+            keepCount: keepCount,
+            trashedCount: trashedCount,
+            encouragementHeadline: encouragementHeadline(keepCount: keepCount, rejectCount: trashedCount)
+        )
+    }
+
+    private static func encouragementHeadline(keepCount: Int, rejectCount: Int) -> String {
+        let messages: [String]
+
+        if keepCount > rejectCount {
+            messages = [
+                "You pulled together a strong set.",
+                "Nice pass. The keepers held up well.",
+                "That review paid off. You kept the best of the batch."
+            ]
+        } else if rejectCount > keepCount {
+            messages = [
+                "Strong call. You cleared out the weaker shots.",
+                "Good review. You made room for the images that matter.",
+                "That was a solid cleanup pass."
+            ]
+        } else {
+            messages = [
+                "Nice work. That was a thoughtful review pass.",
+                "Solid progress. You gave this set a clean edit.",
+                "Well done. You made clear decisions across the set."
+            ]
+        }
+
+        let index = abs(keepCount - rejectCount + keepCount).quotientAndRemainder(dividingBy: messages.count).remainder
+        return messages[index]
     }
 }

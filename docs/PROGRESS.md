@@ -32,3 +32,4 @@
 - Confirmation flow to move rejected photos to macOS Trash.
 - Read-write access for user-selected folders so the trash flow can modify files after confirmation.
 - Completion summary screen after the trash action finishes.
+- Outcome-based encouraging completion messages with warm tone variants.

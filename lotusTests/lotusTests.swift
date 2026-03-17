@@ -179,6 +179,30 @@ struct lotusTests {
         #expect(store.completion?.keepCount == 1)
     }
 
+    @Test func completionHeadlineUsesOutcomeBucketMessages() {
+        let keepHeavy = ReviewCompletion.make(folderName: "Trip", keepCount: 5, trashedCount: 1)
+        let rejectHeavy = ReviewCompletion.make(folderName: "Trip", keepCount: 1, trashedCount: 4)
+        let mixed = ReviewCompletion.make(folderName: "Trip", keepCount: 3, trashedCount: 3)
+
+        #expect([
+            "You pulled together a strong set.",
+            "Nice pass. The keepers held up well.",
+            "That review paid off. You kept the best of the batch."
+        ].contains(keepHeavy.title))
+
+        #expect([
+            "Strong call. You cleared out the weaker shots.",
+            "Good review. You made room for the images that matter.",
+            "That was a solid cleanup pass."
+        ].contains(rejectHeavy.title))
+
+        #expect([
+            "Nice work. That was a thoughtful review pass.",
+            "Solid progress. You gave this set a clean edit.",
+            "Well done. You made clear decisions across the set."
+        ].contains(mixed.title))
+    }
+
     @MainActor
     private static func makePhoto(filename: String, decision: PhotoDecision) -> PhotoRecord {
         PhotoRecord(

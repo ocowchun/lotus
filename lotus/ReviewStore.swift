@@ -338,7 +338,7 @@ final class ReviewStore: ObservableObject {
     }
 
     private func completeReview(folderName: String, keepCount: Int, trashedCount: Int) {
-        completion = ReviewCompletion(folderName: folderName, keepCount: keepCount, trashedCount: trashedCount)
+        completion = ReviewCompletion.make(folderName: folderName, keepCount: keepCount, trashedCount: trashedCount)
         photos = []
         selectedPhotoID = nil
         previewImage = nil
