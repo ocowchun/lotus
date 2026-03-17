@@ -2,7 +2,6 @@
 
 ## TODO
 
-- Add an explicit end-of-review summary state when the user reaches the end of the photo list.
 - Add a direct way to jump back to unresolved (`undecided`) photos from the review flow.
 - Add clear UI messaging that Day 1 does not modify or delete files on disk.
 - Add visible mouse-accessible decision controls for `keep`, `reject`, and `undecided`.
@@ -29,3 +28,7 @@
 - Explainable heuristic scoring with top reasons and technical breakdown.
 - Warning before replacing the current in-memory review when switching folders.
 - Concise and full metadata panel modes with `M` toggle.
+- Automatic finalization when all photo decisions are complete.
+- Confirmation flow to move rejected photos to macOS Trash.
+- Read-write access for user-selected folders so the trash flow can modify files after confirmation.
+- Completion summary screen after the trash action finishes.

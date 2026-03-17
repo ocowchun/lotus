@@ -24,14 +24,24 @@ final class ReviewStore: ObservableObject {
     @Published private(set) var filter: ReviewFilter = .all
     @Published var metadataMode: MetadataPanelMode = .concise
     @Published var isZoomed = false
+    @Published private(set) var completion: ReviewCompletion?
 
     private let pipeline = PhotoPipeline()
     private let shortcutStore: ShortcutStore
+    private let confirmMoveRejectedToTrash: @MainActor (ReviewSummary) -> Bool
+    private let moveRejectedToTrash: ([URL]) throws -> Int
     private var importTask: Task<Void, Never>?
     private var previewTask: Task<Void, Never>?
+    private var isFinalizationInFlight = false
 
-    init(shortcutStore: ShortcutStore) {
+    init(
+        shortcutStore: ShortcutStore,
+        confirmMoveRejectedToTrash: @escaping @MainActor (ReviewSummary) -> Bool = ReviewStore.defaultConfirmMoveRejectedToTrash,
+        moveRejectedToTrash: @escaping ([URL]) throws -> Int = ReviewStore.defaultMoveRejectedToTrash
+    ) {
         self.shortcutStore = shortcutStore
+        self.confirmMoveRejectedToTrash = confirmMoveRejectedToTrash
+        self.moveRejectedToTrash = moveRejectedToTrash
     }
 
     var visiblePhotos: [PhotoRecord] {
@@ -81,6 +91,7 @@ final class ReviewStore: ObservableObject {
         previewTask?.cancel()
 
         folderURL = url
+        completion = nil
         photos = []
         selectedPhotoID = nil
         previewImage = nil
@@ -164,6 +175,12 @@ final class ReviewStore: ObservableObject {
 
         photos[index].decision = decision
         reconcileSelectionAfterMutation(referenceID: selectedPhotoID)
+
+        let currentSummary = summary
+        if currentSummary.undecidedCount == 0 {
+            finalizeReviewIfPossible(summary: currentSummary)
+            return
+        }
 
         if decision != .undecided {
             moveSelection(forward: true)
@@ -288,6 +305,85 @@ final class ReviewStore: ObservableObject {
 
         return alert.runModal() == .alertFirstButtonReturn
     }
+
+    private func finalizeReviewIfPossible(summary: ReviewSummary) {
+        guard !isFinalizationInFlight else { return }
+        guard let folderName = folderURL?.lastPathComponent else { return }
+
+        if summary.rejectCount == 0 {
+            completeReview(folderName: folderName, keepCount: summary.keepCount, trashedCount: 0)
+            return
+        }
+
+        let rejectedURLs = photos
+            .filter { $0.decision == .reject }
+            .map(\.url)
+
+        guard !rejectedURLs.isEmpty else {
+            completeReview(folderName: folderName, keepCount: summary.keepCount, trashedCount: 0)
+            return
+        }
+
+        guard confirmMoveRejectedToTrash(summary) else { return }
+
+        isFinalizationInFlight = true
+        defer { isFinalizationInFlight = false }
+
+        do {
+            let movedCount = try moveRejectedToTrash(rejectedURLs)
+            completeReview(folderName: folderName, keepCount: summary.keepCount, trashedCount: movedCount)
+        } catch {
+            errorMessage = "Lotus could not move rejected photos to Trash."
+        }
+    }
+
+    private func completeReview(folderName: String, keepCount: Int, trashedCount: Int) {
+        completion = ReviewCompletion(folderName: folderName, keepCount: keepCount, trashedCount: trashedCount)
+        photos = []
+        selectedPhotoID = nil
+        previewImage = nil
+        isPreviewLoading = false
+        isZoomed = false
+        metadataMode = .concise
+        filter = .all
+        errorMessage = nil
+    }
+
+    private static func defaultConfirmMoveRejectedToTrash(summary: ReviewSummary) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "Move rejected photos to Trash?"
+        alert.informativeText = "\(summary.rejectCount) rejected photo(s) will be moved to Trash. Kept photos will remain untouched."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Move To Trash")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    nonisolated private static func defaultMoveRejectedToTrash(_ urls: [URL]) throws -> Int {
+        var movedCount = 0
+        for url in urls {
+            var trashedURL: NSURL?
+            try FileManager.default.trashItem(at: url, resultingItemURL: &trashedURL)
+            movedCount += 1
+        }
+        return movedCount
+    }
+
+#if DEBUG
+    func loadFixturePhotos(_ fixturePhotos: [PhotoRecord], folderName: String) {
+        folderURL = URL(fileURLWithPath: "/tmp/\(folderName)")
+        completion = nil
+        photos = fixturePhotos
+        selectedPhotoID = fixturePhotos.first?.id
+        previewImage = nil
+        isPreviewLoading = false
+        isImporting = false
+        errorMessage = nil
+        filter = .all
+        metadataMode = .concise
+        isZoomed = false
+    }
+#endif
 
     private func appendImportedRecords(_ imported: [IndexedPhotoRecord]) {
         let sortedRecords = imported.sorted { $0.index < $1.index }.map(\.record)

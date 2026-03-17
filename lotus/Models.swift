@@ -199,3 +199,21 @@ struct ReviewSummary {
         )
     }
 }
+
+struct ReviewCompletion {
+    let folderName: String
+    let keepCount: Int
+    let trashedCount: Int
+
+    var title: String {
+        trashedCount > 0 ? "Rejected Photos Moved To Trash" : "Review Complete"
+    }
+
+    var message: String {
+        if trashedCount > 0 {
+            "\(trashedCount) rejected photo(s) were moved to Trash. \(keepCount) kept photo(s) remain in place."
+        } else {
+            "No rejected photos needed to be moved. \(keepCount) photo(s) were marked keep."
+        }
+    }
+}

@@ -13,7 +13,9 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if store.photos.isEmpty {
+            if let completion = store.completion {
+                CompletionStateView(completion: completion, selectFolder: store.selectFolder)
+            } else if store.photos.isEmpty {
                 EmptyStateView(
                     isImporting: store.isImporting,
                     errorMessage: store.errorMessage,
@@ -26,6 +28,42 @@ struct ContentView: View {
         .frame(minWidth: 1120, minHeight: 720)
         .background(Color(nsColor: .windowBackgroundColor))
         .modifier(ReviewKeyboardMonitor(store: store, shortcuts: shortcutStore.shortcuts))
+    }
+}
+
+private struct CompletionStateView: View {
+    let completion: ReviewCompletion
+    let selectFolder: () -> Void
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: completion.trashedCount > 0 ? "trash.circle" : "checkmark.circle")
+                .font(.system(size: 46, weight: .medium))
+                .foregroundStyle(.secondary)
+
+            VStack(spacing: 10) {
+                Text(completion.title)
+                    .font(.system(size: 28, weight: .semibold))
+
+                Text(completion.folderName)
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+
+                Text(completion.message)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 520)
+            }
+
+            Button(action: selectFolder) {
+                Label("Review Another Folder", systemImage: "folder")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(40)
     }
 }
 
