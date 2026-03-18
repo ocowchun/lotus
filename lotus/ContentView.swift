@@ -9,7 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     let store: ReviewStore
-    @EnvironmentObject private var shortcutStore: ShortcutStore
+    @Environment(ShortcutStore.self) private var shortcutStore
 
     var body: some View {
         Group {

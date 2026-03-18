@@ -4,8 +4,8 @@
 //
 
 import AppKit
-import Combine
 import Foundation
+import Observation
 import SwiftUI
 
 enum ShortcutKey: String, CaseIterable, Identifiable, Codable {
@@ -116,8 +116,9 @@ struct ReviewShortcuts: Codable {
 }
 
 @MainActor
-final class ShortcutStore: ObservableObject {
-    @Published var shortcuts: ReviewShortcuts {
+@Observable
+final class ShortcutStore {
+    var shortcuts: ReviewShortcuts {
         didSet { save() }
     }
 
@@ -250,7 +251,7 @@ private extension ShortcutKey {
 }
 
 struct SettingsView: View {
-    @EnvironmentObject private var shortcutStore: ShortcutStore
+    @Environment(ShortcutStore.self) private var shortcutStore
     @State private var errorMessage: String?
 
     var body: some View {

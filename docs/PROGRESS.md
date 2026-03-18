@@ -36,3 +36,4 @@
 - Outcome-based encouraging completion messages with warm tone variants.
 - Top-level README with a simple product introduction and current scope.
 - `ReviewStore` migrated from `ObservableObject` to the `@Observable` macro.
+- `ShortcutStore` migrated from `ObservableObject` to the `@Observable` macro and typed `@Environment` injection.
