@@ -10,12 +10,12 @@ import SwiftUI
 @main
 struct lotusApp: App {
     @StateObject private var shortcutStore: ShortcutStore
-    @StateObject private var reviewStore: ReviewStore
+    @State private var reviewStore: ReviewStore
 
     init() {
         let shortcutStore = ShortcutStore()
         _shortcutStore = StateObject(wrappedValue: shortcutStore)
-        _reviewStore = StateObject(wrappedValue: ReviewStore(shortcutStore: shortcutStore))
+        _reviewStore = State(wrappedValue: ReviewStore(shortcutStore: shortcutStore))
     }
 
     var body: some Scene {

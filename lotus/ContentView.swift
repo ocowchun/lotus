@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @ObservedObject var store: ReviewStore
+    let store: ReviewStore
     @EnvironmentObject private var shortcutStore: ShortcutStore
 
     var body: some View {
@@ -113,7 +113,7 @@ private struct EmptyStateView: View {
 }
 
 private struct ReviewWorkspaceView: View {
-    @ObservedObject var store: ReviewStore
+    let store: ReviewStore
 
     var body: some View {
         VStack(spacing: 0) {
@@ -133,7 +133,7 @@ private struct ReviewWorkspaceView: View {
 }
 
 private struct ReviewHeaderView: View {
-    @ObservedObject var store: ReviewStore
+    let store: ReviewStore
 
     var body: some View {
         HStack(spacing: 12) {
@@ -156,7 +156,7 @@ private struct ReviewHeaderView: View {
 }
 
 private struct ReviewHeaderStatusView: View {
-    @ObservedObject var store: ReviewStore
+    let store: ReviewStore
 
     var body: some View {
         HStack(spacing: 10) {
@@ -220,7 +220,7 @@ private struct CountBadge: View {
 }
 
 private struct CurrentPhotoPane: View {
-    @ObservedObject var store: ReviewStore
+    let store: ReviewStore
 
     var body: some View {
         GeometryReader { proxy in
@@ -252,7 +252,7 @@ private struct CurrentPhotoPane: View {
 }
 
 private struct PreviewStage: View {
-    @ObservedObject var store: ReviewStore
+    let store: ReviewStore
 
     var body: some View {
         ZStack {
@@ -677,7 +677,7 @@ private struct ScoreBreakdownView: View {
 }
 
 private struct SidebarPane: View {
-    @ObservedObject var store: ReviewStore
+    let store: ReviewStore
 
     var body: some View {
         VStack(spacing: 0) {
@@ -690,7 +690,7 @@ private struct SidebarPane: View {
 }
 
 private struct SidebarToolbar: View {
-    @ObservedObject var store: ReviewStore
+    let store: ReviewStore
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -722,7 +722,7 @@ private struct SidebarToolbar: View {
 }
 
 private struct PhotoList: View {
-    @ObservedObject var store: ReviewStore
+    let store: ReviewStore
 
     var body: some View {
         ScrollViewReader { proxy in

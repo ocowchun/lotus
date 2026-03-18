@@ -12,6 +12,7 @@
 
 - Refine the review UI layout, especially the metadata/evaluation panel density and responsiveness.
 - Continue validating the Day 1 review workflow against [PRD-day1.md](/Users/ocowchun/projects/swift/lotus/docs/PRD-day1.md).
+- Incrementally migrate app state to SwiftUI's newer Observation model.
 
 ## Done
 
@@ -34,3 +35,4 @@
 - Completion summary screen after the trash action finishes.
 - Outcome-based encouraging completion messages with warm tone variants.
 - Top-level README with a simple product introduction and current scope.
+- `ReviewStore` migrated from `ObservableObject` to the `@Observable` macro.

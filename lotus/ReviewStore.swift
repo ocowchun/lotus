@@ -6,25 +6,27 @@
 import AppKit
 import Combine
 import Foundation
+import Observation
 
 @MainActor
-final class ReviewStore: ObservableObject {
+@Observable
+final class ReviewStore {
     private enum ImportBatching {
         static let recordBatchSize = 24
         static let enrichmentConcurrency = 4
     }
 
-    @Published private(set) var folderURL: URL?
-    @Published private(set) var photos: [PhotoRecord] = []
-    @Published var selectedPhotoID: PhotoRecord.ID?
-    @Published private(set) var previewImage: NSImage?
-    @Published private(set) var isPreviewLoading = false
-    @Published private(set) var isImporting = false
-    @Published private(set) var errorMessage: String?
-    @Published private(set) var filter: ReviewFilter = .all
-    @Published var metadataMode: MetadataPanelMode = .concise
-    @Published var isZoomed = false
-    @Published private(set) var completion: ReviewCompletion?
+    private(set) var folderURL: URL?
+    private(set) var photos: [PhotoRecord] = []
+    var selectedPhotoID: PhotoRecord.ID?
+    private(set) var previewImage: NSImage?
+    private(set) var isPreviewLoading = false
+    private(set) var isImporting = false
+    private(set) var errorMessage: String?
+    private(set) var filter: ReviewFilter = .all
+    var metadataMode: MetadataPanelMode = .concise
+    var isZoomed = false
+    private(set) var completion: ReviewCompletion?
 
     private let pipeline = PhotoPipeline()
     private let shortcutStore: ShortcutStore

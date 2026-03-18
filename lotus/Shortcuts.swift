@@ -157,7 +157,7 @@ struct ShortcutConflictError: LocalizedError {
 }
 
 struct ReviewKeyboardMonitor: ViewModifier {
-    @ObservedObject var store: ReviewStore
+    let store: ReviewStore
     let shortcuts: ReviewShortcuts
 
     func body(content: Content) -> some View {
