@@ -37,3 +37,4 @@
 - Top-level README with a simple product introduction and current scope.
 - `ReviewStore` migrated from `ObservableObject` to the `@Observable` macro.
 - `ShortcutStore` migrated from `ObservableObject` to the `@Observable` macro and typed `@Environment` injection.
+- `ContentView` and the metadata/evaluation UI were split into dedicated review section files, with a stable top-level container instead of root-level branch swapping.
