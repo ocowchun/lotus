@@ -14,3 +14,15 @@ The app helps you:
 Lotus is currently a local-only, macOS-only app focused on a simple review workflow for a few hundred photos.
 
 It does not use cloud processing or backend services, and it does not delete files automatically during scanning or review.
+
+## Release Build
+
+To produce a shareable macOS app bundle and zip archive for testers, run:
+
+```bash
+./scripts/build-release.sh
+```
+
+That script creates:
+- `build/share/lotus.app`
+- `build/share/lotus-macos-universal.zip`

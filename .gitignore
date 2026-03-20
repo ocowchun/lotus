@@ -7,6 +7,9 @@ DerivedData/
 # Swift Package Manager
 .build/
 
+# Local release/build artifacts
+build/
+
 # macOS
 .DS_Store
 

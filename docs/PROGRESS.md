@@ -40,3 +40,4 @@
 - `ContentView` and the metadata/evaluation UI were split into dedicated review section files, with a stable top-level container instead of root-level branch swapping.
 - Swift source files were reorganized into `App`, `Review`, `Review/Views`, and `Support` folders to make app flow and ownership easier to navigate.
 - The app icon was redesigned around a minimal monochrome Aperture-inspired mark, with iterative drafts kept under `misc/app-icon/`.
+- A reusable `scripts/build-release.sh` flow now produces a universal macOS tester build under `build/share/`.
