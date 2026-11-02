@@ -215,7 +215,8 @@ private final class KeyboardEventView: NSView {
         }
 
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handler?(event) ?? event
+            guard let handler = self?.handler else { return event }
+            return handler(event)
         }
     }
 

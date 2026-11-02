@@ -16,6 +16,7 @@
 
 ## Done
 
+- Review shortcuts preserve consumed keyboard events, preventing handled keys such as S/D from reaching macOS and triggering its alert sound. Verified event forwarding behavior and all nine unit tests; listening in the running app remains a manual check.
 - Folder selection for a single local directory.
 - Non-recursive scan of supported still-image formats.
 - Alphabetical photo ordering.
