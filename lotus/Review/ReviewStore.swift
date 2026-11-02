@@ -29,21 +29,23 @@ final class ReviewStore {
     private(set) var completion: ReviewCompletion?
 
     private let pipeline = PhotoPipeline()
+    private let previewLoader: PreviewLoader
     private let shortcutStore: ShortcutStore
     private let confirmMoveRejectedToTrash: @MainActor (ReviewSummary) -> Bool
     private let moveRejectedToTrash: ([URL]) throws -> Int
     private var importTask: Task<Void, Never>?
-    private var previewTask: Task<Void, Never>?
     private var isFinalizationInFlight = false
 
     init(
         shortcutStore: ShortcutStore,
         confirmMoveRejectedToTrash: @escaping @MainActor (ReviewSummary) -> Bool = ReviewStore.defaultConfirmMoveRejectedToTrash,
-        moveRejectedToTrash: @escaping ([URL]) throws -> Int = ReviewStore.defaultMoveRejectedToTrash
+        moveRejectedToTrash: @escaping ([URL]) throws -> Int = ReviewStore.defaultMoveRejectedToTrash,
+        previewLoader: PreviewLoader? = nil
     ) {
         self.shortcutStore = shortcutStore
         self.confirmMoveRejectedToTrash = confirmMoveRejectedToTrash
         self.moveRejectedToTrash = moveRejectedToTrash
+        self.previewLoader = previewLoader ?? PreviewLoader()
     }
 
     var visiblePhotos: [PhotoRecord] {
@@ -90,7 +92,7 @@ final class ReviewStore {
 
     func loadFolder(at url: URL) {
         importTask?.cancel()
-        previewTask?.cancel()
+        previewLoader.clear()
 
         folderURL = url
         completion = nil
@@ -237,24 +239,19 @@ final class ReviewStore {
     }
 
     private func loadPreview(for id: UUID) {
-        previewTask?.cancel()
         previewImage = nil
         isPreviewLoading = true
 
         guard let record = photos.first(where: { $0.id == id }) else {
+            previewLoader.clear()
             isPreviewLoading = false
             return
         }
 
-        previewTask = Task { [weak self] in
-            guard let self else { return }
-
-            let image = try? await Task.detached(priority: .userInitiated) {
-                try PhotoPipeline().makePreview(for: record.url)
-            }.value
-
-            guard !Task.isCancelled else { return }
-            self.previewImage = image
+        let neighbors = PreviewLoader.neighbors(in: visiblePhotos.map(\.url), around: record.url)
+        previewLoader.select(record.url, neighbors: neighbors) { [weak self] image in
+            guard let self, self.selectedPhotoID == id else { return }
+            self.previewImage = image.map { NSImage(cgImage: $0, size: .zero) }
             self.isPreviewLoading = false
         }
     }
@@ -263,12 +260,15 @@ final class ReviewStore {
         let pool = visiblePhotos
 
         guard !pool.isEmpty else {
+            previewLoader.clear()
             selectedPhotoID = nil
             previewImage = nil
+            isPreviewLoading = false
             return
         }
 
         if let selectedPhotoID, pool.contains(where: { $0.id == selectedPhotoID }) {
+            loadPreview(for: selectedPhotoID)
             return
         }
 
@@ -340,6 +340,7 @@ final class ReviewStore {
     }
 
     private func completeReview(folderName: String, keepCount: Int, trashedCount: Int) {
+        previewLoader.clear()
         completion = ReviewCompletion.make(folderName: folderName, keepCount: keepCount, trashedCount: trashedCount)
         photos = []
         selectedPhotoID = nil
@@ -373,6 +374,7 @@ final class ReviewStore {
 
 #if DEBUG
     func loadFixturePhotos(_ fixturePhotos: [PhotoRecord], folderName: String) {
+        previewLoader.clear()
         folderURL = URL(fileURLWithPath: "/tmp/\(folderName)")
         completion = nil
         photos = fixturePhotos
@@ -396,6 +398,8 @@ final class ReviewStore {
         if selectedPhotoID == nil, let first = sortedRecords.first {
             selectedPhotoID = first.id
             loadPreview(for: first.id)
+        } else if let selectedPhotoID {
+            loadPreview(for: selectedPhotoID)
         }
     }
 

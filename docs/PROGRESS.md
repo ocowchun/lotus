@@ -16,6 +16,7 @@
 
 ## Done
 
+- Added a preview cache capped at six images and 64 MiB of decoded pixels, with preloading two photos ahead and one behind in filtered review order. Preview decoding runs off the main actor one image at a time; cached navigation is immediate, and replacing/completing a review clears the cache. All 19 unit tests passed, including 300-photo cache bounds and review integration checks. The six demo JPEGs occupied 49.44 MiB; a standalone loader check measured about 226 ms for the first preview and under 0.04 ms for warmed image delivery. End-to-end screen rendering and total process memory remain manual checks.
 - Review shortcuts preserve consumed keyboard events, preventing handled keys such as S/D from reaching macOS and triggering its alert sound. Verified event forwarding behavior and all nine unit tests; listening in the running app remains a manual check.
 - Folder selection for a single local directory.
 - Non-recursive scan of supported still-image formats.

@@ -65,13 +65,14 @@ struct PhotoPipeline: Sendable {
         return image
     }
 
-    nonisolated func makePreview(for url: URL) throws -> NSImage {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let image = makeImage(from: source, maxPixelSize: 1800) else {
-            throw PhotoPipelineError.unreadableImage
+    nonisolated func makePreview(for url: URL) throws -> CGImage {
+        try autoreleasepool {
+            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+                  let image = makeCGImage(from: source, maxPixelSize: 1800, cacheImmediately: true) else {
+                throw PhotoPipelineError.unreadableImage
+            }
+            return image
         }
-
-        return image
     }
 
     nonisolated func analyze(url: URL) throws -> PhotoScore {
@@ -154,12 +155,12 @@ struct PhotoPipeline: Sendable {
         return NSImage(cgImage: cgImage, size: .zero)
     }
 
-    nonisolated private func makeCGImage(from source: CGImageSource, maxPixelSize: Int) -> CGImage? {
+    nonisolated private func makeCGImage(from source: CGImageSource, maxPixelSize: Int, cacheImmediately: Bool = false) -> CGImage? {
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-            kCGImageSourceShouldCacheImmediately: false
+            kCGImageSourceShouldCacheImmediately: cacheImmediately
         ]
 
         return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
